@@ -1,0 +1,32 @@
+name: Playwright Automated QA
+
+# 'workflow_dispatch'는 외부 API나 버튼 클릭으로 이 로봇을 수동으로 깨울 수 있게 해주는 마법의 설정입니다.
+on:
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: '검증할 타겟 웹페이지 URL'
+        required: true
+        type: string
+
+jobs:
+  test:
+    timeout-minutes: 10 # 최대 10분 동안 실행 보장
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: lts/*
+        
+    - name: 패키지 설치
+      run: npm ci
+      
+    - name: Playwright 브라우저 설치
+      run: npx playwright install --with-deps
+      
+    - name: QA 자동화 스크립트 실행!
+      env:
+        # 화면에서 입력받은 URL을 Playwright 스크립트로 전달합니다.
+        TARGET_URL: ${{ inputs.target_url }} 
+      run: npx playwright test
