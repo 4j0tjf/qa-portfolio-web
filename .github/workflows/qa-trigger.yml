@@ -25,8 +25,20 @@ jobs:
     - name: 패키지 설치
       run: npm ci
       
-    - name: Playwright 설치
+    - name: Playwright 브라우저 캐싱 (창고에서 꺼내오기)
+      uses: actions/cache@v4
+      id: playwright-cache
+      with:
+        path: ~/.cache/ms-playwright
+        key: ${{ runner.os }}-playwright-${{ hashFiles('**/package-lock.json') }}
+        
+    - name: Playwright 설치 (창고에 없으면 다운로드)
+      if: steps.playwright-cache.outputs.cache-hit != 'true'
       run: npx playwright install --with-deps
+      
+    - name: OS 의존성만 빠르게 설치 (창고에 브라우저가 있을 때)
+      if: steps.playwright-cache.outputs.cache-hit == 'true'
+      run: npx playwright install-deps
       
     - name: QA 자동화 스크립트 실행
       env:

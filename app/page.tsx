@@ -3,10 +3,13 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
-// 1. 내 브라우저(화면)에서 DB를 직접 들여다보기 위한 열쇠 세팅
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
+
+// ⭐️ 본인의 깃허브 정보로 수정해 주세요!
+const GITHUB_OWNER = '4j0tjf'; 
+const GITHUB_REPO = 'qa-portfolio-web';
 
 export default function Home() {
   const [urlText, setUrlText] = useState('');
@@ -15,6 +18,41 @@ export default function Home() {
   
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [jobStatus, setJobStatus] = useState<string | null>(null);
+  
+  // ⭐️ 깃허브 Run ID를 저장할 State 추가
+  const [runId, setRunId] = useState<string | null>(null);
+
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  // 다이렉트 다운로드 함수
+  const handleDirectDownload = async () => {
+    if (!runId) return;
+    setIsDownloading(true);
+    
+    try {
+      // 우리가 방금 만든 백엔드 배달부(API)를 호출합니다.
+      const response = await fetch(`/api/download?runId=${runId}`);
+      if (!response.ok) throw new Error('다운로드 실패');
+
+      // 파일을 덩어리(Blob)로 받아서 내 브라우저에 임시 링크를 만듭니다.
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      
+      // 안 보이는 <a> 태그를 몰래 만들어서 강제로 클릭(다운로드) 시킵니다!
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `QA-Report-${runId}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url); // 다 쓴 임시 링크는 청소
+      
+    } catch (error) {
+      alert('파일을 다운로드하는 중 오류가 발생했습니다. 조금 뒤에 다시 시도해주세요.');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
 
   const handleStartQA = async () => {
     const urlArray = urlText.split('\n').map(url => url.trim()).filter(url => url !== '');
@@ -27,9 +65,9 @@ export default function Home() {
     setResult(null);
     setCurrentJobId(null);
     setJobStatus('pending');
+    setRunId(null); // 시작할 때 초기화
 
     try {
-      // 서버로 로봇 출동 명령 내리기
       const response = await fetch('/api/qa', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -51,34 +89,33 @@ export default function Home() {
     }
   };
 
-  // 2. ⭐ 핵심 로직: 접수번호가 생기면 3초마다 DB를 몰래 훔쳐보는 마법 (Polling)
   useEffect(() => {
     let intervalId: NodeJS.Timeout;
 
     if (currentJobId && jobStatus === 'pending') {
       intervalId = setInterval(async () => {
-        // DB에서 내 접수번호의 상태(status)만 가져옵니다.
+        // ⭐️ DB에서 status와 함께 run_id도 가져옵니다!
         const { data } = await supabase
           .from('qa_jobs')
-          .select('status')
+          .select('status, run_id')
           .eq('job_id', currentJobId)
           .single();
 
-        // 로봇이 'success'나 'failed'로 글자를 바꿨다면?
         if (data && data.status !== 'pending') {
           setJobStatus(data.status);
-          setIsLoading(false); // 로봇 일 끝났으니 로딩 버튼 해제
+          setRunId(data.run_id); // ⭐️ 가져온 run_id 저장
+          setIsLoading(false);
           
           if (data.status === 'success') {
             setResult(`🎉 검사 완료! [접수번호: ${currentJobId}]\n모든 URL이 안전하게 테스트를 통과했습니다! ✅`);
           } else {
-            setResult(`🚨 검사 실패! [접수번호: ${currentJobId}]\n테스트 중 에러가 발견되었습니다. GitHub 로봇의 상세 로그를 확인하세요. ❌`);
+            setResult(`🚨 검사 실패! [접수번호: ${currentJobId}]\n테스트 중 에러가 발견되었습니다. 아래 버튼을 눌러 증거물을 확인하세요. ❌`);
           }
         }
-      }, 3000); // 3000ms = 3초마다 확인
+      }, 3000);
     }
 
-    return () => clearInterval(intervalId); // 화면이 꺼지면 확인 중단
+    return () => clearInterval(intervalId);
   }, [currentJobId, jobStatus]);
 
   return (
@@ -106,10 +143,11 @@ export default function Home() {
               isLoading ? 'bg-indigo-400 animate-pulse cursor-wait' : 'bg-blue-600 hover:bg-blue-700'
             }`}
           >
-            {isLoading ? '🤖 로봇이 꼼꼼하게 검사 중입니다...' : `${urlText.split('\n').filter(u => u.trim() !== '').length}개 페이지 테스트 시작하기`}
+            {isLoading ? '🤖 로봇이 꼼꼼하게 검사 중입니다...' : '테스트 시작하기'}
           </button>
         </div>
 
+        {/* 결과 메시지 표시 영역 */}
         {result && (
           <div className={`mt-6 p-5 border rounded-xl whitespace-pre-wrap text-center font-medium shadow-inner transition-all duration-500 ${
             jobStatus === 'success' ? 'bg-green-50 border-green-200 text-green-800' : 
@@ -117,6 +155,21 @@ export default function Home() {
             'bg-blue-50 border-blue-200 text-blue-800'
           }`}>
             {result}
+            
+            {/* ⭐️ 작업이 끝났고 run_id가 있다면 다운로드 버튼을 보여줍니다! */}
+            {(jobStatus === 'success' || jobStatus === 'failed') && runId && (
+              <button 
+                onClick={handleDirectDownload}
+                disabled={isDownloading}
+                className={`mt-4 inline-block font-semibold py-3 px-6 rounded-lg transition-colors shadow-md ${
+                  isDownloading 
+                  ? 'bg-gray-400 cursor-wait text-white animate-pulse' 
+                  : 'bg-gray-800 hover:bg-black text-white'
+                }`}
+              >
+                {isDownloading ? '📥 파일 압축 중...' : '📦 상세 리포트 (ZIP) 다이렉트 다운로드'}
+              </button>
+            )}
           </div>
         )}
       </div>
