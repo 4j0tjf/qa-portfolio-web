@@ -11,6 +11,11 @@ on:
         description: 'Supabase 접수 번호'
         required: true
         type: string
+      # 👇 새로 추가됨: API에서 보낸 spec_url을 받을 준비
+      spec_url:
+        description: '기준이 되는 Spec URL'
+        required: true
+        type: string
 
 jobs:
   test:
@@ -25,27 +30,27 @@ jobs:
     - name: 패키지 설치
       run: npm ci
       
-    - name: Playwright 브라우저 캐싱 (창고에서 꺼내오기)
+    - name: Playwright 브라우저 캐싱
       uses: actions/cache@v4
       id: playwright-cache
       with:
         path: ~/.cache/ms-playwright
         key: ${{ runner.os }}-playwright-${{ hashFiles('**/package-lock.json') }}
         
-    - name: Playwright 설치 (창고에 없으면 다운로드)
+    - name: Playwright 설치
       if: steps.playwright-cache.outputs.cache-hit != 'true'
       run: npx playwright install --with-deps
       
-    - name: OS 의존성만 빠르게 설치 (창고에 브라우저가 있을 때)
+    - name: OS 의존성 설치
       if: steps.playwright-cache.outputs.cache-hit == 'true'
       run: npx playwright install-deps
       
     - name: QA 자동화 스크립트 실행
       env:
         TARGET_URLS: ${{ inputs.target_urls }} 
+        SPEC_URL: ${{ inputs.spec_url }} # 👇 추가됨: Playwright 코드(.spec.ts)로 환경변수 전달
       run: npx playwright test
 
-    # 👇 [새로 추가된 기능] 테스트가 실패하든 성공하든, 결과물(사진, HTML 리포트)을 깃허브에 압축해서 저장합니다!
     - name: 에러 증거물(스크린샷 및 리포트) 저장하기
       uses: actions/upload-artifact@v4
       if: always() 
@@ -62,7 +67,6 @@ jobs:
           STATUS="success"
         fi
 
-        # ${{ github.run_id }} 가 바로 이번 작업의 영수증 번호입니다!
         curl -X PATCH "${{ secrets.SUPABASE_URL }}/rest/v1/qa_jobs?job_id=eq.${{ inputs.job_id }}" \
         -H "apikey: ${{ secrets.SUPABASE_KEY }}" \
         -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY }}" \

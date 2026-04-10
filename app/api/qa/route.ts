@@ -7,59 +7,54 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { urls } = body;
+    // 1. 화면에서 specUrl과 urls를 모두 받아옵니다.
+    const { specUrl, urls } = await request.json();
 
-    if (!urls || urls.length === 0) {
-      return NextResponse.json({ error: 'URL이 필요합니다.' }, { status: 400 });
+    if (!specUrl || !urls || urls.length === 0) {
+      return NextResponse.json({ error: 'Spec URL과 Target URL이 모두 필요합니다.' }, { status: 400 });
     }
 
-    const jobId = `MULTI-QA-${Math.floor(Math.random() * 10000)}`;
-
-    const { error: dbError } = await supabase
+    // 2. Supabase에 새로운 작업을 등록합니다.
+    const { data: jobData, error: dbError } = await supabase
       .from('qa_jobs')
-      .insert([
-        { job_id: jobId, urls: urls, status: 'pending' }
-      ]);
+      .insert([{ status: 'pending', target_urls: urls }]) // (필요하다면 spec_url 컬럼을 추가해 저장해도 좋습니다)
+      .select('job_id')
+      .single();
 
-    if (dbError) {
-      console.error('DB 저장 에러:', dbError);
-      return NextResponse.json({ error: '데이터베이스 저장에 실패했습니다.' }, { status: 500 });
-    }
+    if (dbError) throw new Error('DB 저장 실패');
 
     const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
     const GITHUB_OWNER = process.env.GITHUB_OWNER;
     const GITHUB_REPO = process.env.GITHUB_REPO;
-    const WORKFLOW_ID = 'qa-trigger.yml'; 
 
-    const response = await fetch(
-      `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/workflows/${WORKFLOW_ID}/dispatches`,
-      {
-        method: 'POST',
-        headers: {
-          'Accept': 'application/vnd.github.v3+json',
-          'Authorization': `Bearer ${GITHUB_TOKEN}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ref: 'main',
-          inputs: {
-            target_urls: JSON.stringify(urls), 
-            job_id: jobId,
-          },
-        }),
-      }
-    );
+    // 3. 깃허브 Actions에 로봇 출동 명령을 내립니다!
+    const githubRes = await fetch(`https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/workflows/qa-trigger.yml/dispatches`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/vnd.github.v3+json',
+        'Authorization': `Bearer ${GITHUB_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        ref: 'main',
+        inputs: {
+          target_urls: JSON.stringify(urls),
+          job_id: jobData.job_id.toString(),
+          spec_url: specUrl // ⭐️ 추가됨: 깃허브로 Spec URL 전송!
+        }
+      })
+    });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('\n🚨 [깃허브 에러 상세 내용] 🚨\n', errorText, '\n');
-      return NextResponse.json({ error: 'GitHub Actions 트리거에 실패했습니다.' }, { status: 500 });
+    if (!githubRes.ok) {
+      const errTxt = await githubRes.text();
+      console.error('GitHub API 에러:', errTxt);
+      throw new Error('GitHub Actions 실행 실패');
     }
 
-    return NextResponse.json({ success: true, jobId: jobId });
-    
-  } catch (error) {
-    return NextResponse.json({ error: '서버 오류 발생' }, { status: 500 });
+    return NextResponse.json({ success: true, jobId: jobData.job_id });
+
+  } catch (error: any) {
+    console.error('API Error:', error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
