@@ -6,7 +6,6 @@ const rawUrls = process.env.TARGET_URLS || '["https://example.com"]';
 const urlList = JSON.parse(rawUrls);
 const specUrl = process.env.SPEC_URL || 'https://clova-x.naver.com'; 
 
-// 애니메이션 강제 정지 CSS
 const freezeCss = `
   *, *::before, *::after {
     transition: none !important;
@@ -19,19 +18,16 @@ test.describe('동적 VRT 자동화', () => {
   
   for (const url of urlList) {
     test(`[시각적 비교] Target: ${url}`, async ({ page }, testInfo) => {
-
-      // 🚨 [핵심 해결책 1] 제한 시간을 30초에서 60초(1분)로 대폭 늘려줍니다!
       test.setTimeout(60000);
 
       // ==========================================
       // [STEP 1] 기준(Spec) 페이지 정답지 만들기
       // ==========================================
-      // 🚨 [핵심 해결책 2] 'load' 대신 'domcontentloaded'를 써서 렌더링 속도를 확 높입니다.
-      await page.goto(specUrl, { waitUntil: 'domcontentloaded' });
+      // 💡 사파리(Webkit)가 멈추지 않도록 'domcontentloaded'로 뼈대만 빠르게 잡습니다.
+      await page.goto(specUrl, { waitUntil: 'domcontentloaded', timeout: 20000 });
       await page.addStyleTag({ content: freezeCss });
-      await page.waitForTimeout(2000); // 2초 대기
+      await page.waitForTimeout(1500); // 렌더링 안정화 대기
 
-      // 🚨 [핵심 해결책 3] 대괄호([])를 빼고 일반 문자열로 돌려놓아야 HTML 리포트에 사진이 잘 붙습니다.
       const snapshotPath = testInfo.snapshotPath('dynamic-spec.png');
       fs.mkdirSync(path.dirname(snapshotPath), { recursive: true });
       await page.screenshot({ path: snapshotPath, fullPage: true });
@@ -39,19 +35,21 @@ test.describe('동적 VRT 자동화', () => {
       // ==========================================
       // [STEP 2] 타겟 페이지 접속 및 비교 검수
       // ==========================================
-      await page.goto(url, { waitUntil: 'domcontentloaded' });
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20000 });
       await page.addStyleTag({ content: freezeCss });
-      await page.waitForTimeout(2000);
+      await page.waitForTimeout(1500);
 
-      // 여기서 실패할 경우, Playwright가 알아서 Diff, Actual, Expected 사진 3장을 리포트에 꽂아줍니다!
+      // 🚨 [가장 중요한 수정!!!] 
+      // 10% 비율 허용(maxDiffPixelRatio)을 버리고, maxDiffPixels(절대 픽셀 수)를 도입합니다.
+      // 이제 화면에 있는 "단어 하나"만 달라도 즉시 FAIL 처리됩니다!
       await expect(page).toHaveScreenshot('dynamic-spec.png', {
         fullPage: true,
-        maxDiffPixelRatio: 0.1, 
+        maxDiffPixels: 200, // 💡 단 200픽셀(아주 작은 네모 반점 크기)만 달라도 얄짤없이 실패!
         timeout: 10000
       });
       
       // ==========================================
-      // [STEP 3] 성공 시 추가 인증샷 (실패하면 여기는 실행 안 됨)
+      // [STEP 3] 성공 시 추가 인증샷
       // ==========================================
       const actualShot = await page.screenshot({ fullPage: true });
       await testInfo.attach('✅ 성공: 현재 타겟 화면', { body: actualShot, contentType: 'image/png' });
