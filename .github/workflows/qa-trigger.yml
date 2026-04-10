@@ -33,6 +33,15 @@ jobs:
         TARGET_URLS: ${{ inputs.target_urls }} 
       run: npx playwright test
 
+    # 👇 [새로 추가된 기능] 테스트가 실패하든 성공하든, 결과물(사진, HTML 리포트)을 깃허브에 압축해서 저장합니다!
+    - name: 에러 증거물(스크린샷 및 리포트) 저장하기
+      uses: actions/upload-artifact@v4
+      if: always() 
+      with:
+        name: playwright-report-${{ inputs.job_id }}
+        path: playwright-report/
+        retention-days: 7
+
     - name: Supabase DB에 결과 보고하기
       if: always()
       run: |
