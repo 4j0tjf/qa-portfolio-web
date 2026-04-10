@@ -50,8 +50,9 @@ jobs:
           STATUS="success"
         fi
 
+        # ${{ github.run_id }} 가 바로 이번 작업의 영수증 번호입니다!
         curl -X PATCH "${{ secrets.SUPABASE_URL }}/rest/v1/qa_jobs?job_id=eq.${{ inputs.job_id }}" \
         -H "apikey: ${{ secrets.SUPABASE_KEY }}" \
         -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY }}" \
         -H "Content-Type: application/json" \
-        -d "{\"status\": \"$STATUS\"}"
+        -d "{\"status\": \"$STATUS\", \"run_id\": \"${{ github.run_id }}\"}"
