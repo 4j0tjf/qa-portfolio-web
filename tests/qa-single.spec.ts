@@ -6,7 +6,7 @@ const rawUrls = process.env.TARGET_URLS || '["https://example.com"]';
 const urlList = JSON.parse(rawUrls);
 const specUrl = process.env.SPEC_URL || 'https://clova-x.naver.com'; 
 
-// ⭐️ 마법의 CSS: 화면의 모든 애니메이션과 깜빡임을 강제로 정지시킵니다.
+// 애니메이션 강제 정지 CSS
 const freezeCss = `
   *, *::before, *::after {
     transition: none !important;
@@ -15,46 +15,49 @@ const freezeCss = `
   }
 `;
 
-test.describe('동적 VRT(Visual Regression Testing) 자동화', () => {
+test.describe('동적 VRT 자동화', () => {
   
   for (const url of urlList) {
     test(`[시각적 비교] Target: ${url}`, async ({ page }, testInfo) => {
 
+      // 🚨 [핵심 해결책 1] 제한 시간을 30초에서 60초(1분)로 대폭 늘려줍니다!
+      test.setTimeout(60000);
+
       // ==========================================
       // [STEP 1] 기준(Spec) 페이지 정답지 만들기
       // ==========================================
-      // 네이버 같은 무거운 사이트는 networkidle 대신 load를 쓰고 살짝 기다려주는 것이 훨씬 안전합니다.
-      await page.goto(specUrl, { waitUntil: 'load' });
-      await page.addStyleTag({ content: freezeCss }); // 애니메이션 얼음!
-      await page.waitForTimeout(3000); // 렌더링이 완전히 안정화될 때까지 3초 대기
+      // 🚨 [핵심 해결책 2] 'load' 대신 'domcontentloaded'를 써서 렌더링 속도를 확 높입니다.
+      await page.goto(specUrl, { waitUntil: 'domcontentloaded' });
+      await page.addStyleTag({ content: freezeCss });
+      await page.waitForTimeout(2000); // 2초 대기
 
-      // ⭐️ 핵심: 문자열 대신 배열 ['...'] 을 넣으면 브라우저/OS 이름표가 마음대로 붙는 것을 방지합니다.
-      const snapshotPath = testInfo.snapshotPath(['dynamic-spec.png']);
+      // 🚨 [핵심 해결책 3] 대괄호([])를 빼고 일반 문자열로 돌려놓아야 HTML 리포트에 사진이 잘 붙습니다.
+      const snapshotPath = testInfo.snapshotPath('dynamic-spec.png');
       fs.mkdirSync(path.dirname(snapshotPath), { recursive: true });
       await page.screenshot({ path: snapshotPath, fullPage: true });
 
       // ==========================================
       // [STEP 2] 타겟 페이지 접속 및 비교 검수
       // ==========================================
-      await page.goto(url, { waitUntil: 'load' });
-      await page.addStyleTag({ content: freezeCss }); // 타겟 페이지도 똑같이 얼음!
-      await page.waitForTimeout(3000);
+      await page.goto(url, { waitUntil: 'domcontentloaded' });
+      await page.addStyleTag({ content: freezeCss });
+      await page.waitForTimeout(2000);
 
-      // ⭐️ 여기서도 똑같이 배열 ['...'] 을 넣어 방금 만든 파일과 정확하게 1:1 매칭시킵니다.
-      await expect(page).toHaveScreenshot(['dynamic-spec.png'], {
+      // 여기서 실패할 경우, Playwright가 알아서 Diff, Actual, Expected 사진 3장을 리포트에 꽂아줍니다!
+      await expect(page).toHaveScreenshot('dynamic-spec.png', {
         fullPage: true,
-        maxDiffPixelRatio: 0.1, // 10% 픽셀 오차 허용 (폰트 렌더링 등 대비)
-        timeout: 15000
+        maxDiffPixelRatio: 0.1, 
+        timeout: 10000
       });
       
       // ==========================================
-      // [STEP 3] 성공 인증샷 첨부 (성공했을 경우에만 실행됨)
+      // [STEP 3] 성공 시 추가 인증샷 (실패하면 여기는 실행 안 됨)
       // ==========================================
       const actualShot = await page.screenshot({ fullPage: true });
-      await testInfo.attach('✅ Actual (현재 타겟 화면)', { body: actualShot, contentType: 'image/png' });
+      await testInfo.attach('✅ 성공: 현재 타겟 화면', { body: actualShot, contentType: 'image/png' });
 
       const expectedShot = fs.readFileSync(snapshotPath);
-      await testInfo.attach('✅ Expected (기준 Spec 화면)', { body: expectedShot, contentType: 'image/png' });
+      await testInfo.attach('✅ 성공: 기준 Spec 화면', { body: expectedShot, contentType: 'image/png' });
       
     });
   }
