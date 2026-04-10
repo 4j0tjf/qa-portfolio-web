@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       job_id:
-        description: 'Supabase 접수 번호' # 👈 프론트엔드에서 넘겨준 번호표를 받습니다.
+        description: 'Supabase 접수 번호'
         required: true
         type: string
 
@@ -33,7 +33,6 @@ jobs:
         TARGET_URLS: ${{ inputs.target_urls }} 
       run: npx playwright test
 
-    # 👇 [새로 추가된 핵심 로직] 테스트가 끝나면 Supabase DB에 결과를 덮어씁니다!
     - name: Supabase DB에 결과 보고하기
       if: always()
       run: |
@@ -42,7 +41,6 @@ jobs:
           STATUS="success"
         fi
 
-        # curl을 이용해 Supabase 창고의 해당 job_id를 찾아서 상태(status)를 업데이트합니다.
         curl -X PATCH "${{ secrets.SUPABASE_URL }}/rest/v1/qa_jobs?job_id=eq.${{ inputs.job_id }}" \
         -H "apikey: ${{ secrets.SUPABASE_KEY }}" \
         -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY }}" \
