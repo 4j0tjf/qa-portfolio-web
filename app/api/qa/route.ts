@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-// 1. 방금 .env.local에 적은 주소와 키를 가져와서 DB 클라이언트를 만듭니다.
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -15,10 +14,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'URL이 필요합니다.' }, { status: 400 });
     }
 
-    // 이번 작업의 고유 번호(접수 번호)를 먼저 만듭니다.
     const jobId = `MULTI-QA-${Math.floor(Math.random() * 10000)}`;
 
-    // ⭐ 핵심: GitHub 로봇을 깨우기 전에, DB 창고에 먼저 '대기 중(pending)' 상태로 기록을 남깁니다!
     const { error: dbError } = await supabase
       .from('qa_jobs')
       .insert([
@@ -30,7 +27,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '데이터베이스 저장에 실패했습니다.' }, { status: 500 });
     }
 
-    // 아래는 기존과 동일하게 GitHub Actions 로봇을 깨우는 로직입니다.
     const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
     const GITHUB_OWNER = process.env.GITHUB_OWNER;
     const GITHUB_REPO = process.env.GITHUB_REPO;
@@ -49,16 +45,18 @@ export async function POST(request: Request) {
           ref: 'main',
           inputs: {
             target_urls: JSON.stringify(urls), 
+            job_id: jobId,
           },
         }),
       }
     );
 
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error('\n🚨 [깃허브 에러 상세 내용] 🚨\n', errorText, '\n');
       return NextResponse.json({ error: 'GitHub Actions 트리거에 실패했습니다.' }, { status: 500 });
     }
 
-    // 성공적으로 마무리되었다면 화면에 접수 번호를 돌려줍니다.
     return NextResponse.json({ success: true, jobId: jobId });
     
   } catch (error) {
