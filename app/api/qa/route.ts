@@ -14,14 +14,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Spec URL과 Target URL이 모두 필요합니다.' }, { status: 400 });
     }
 
-    // 2. Supabase에 새로운 작업을 등록합니다.
+    const newJobId = crypto.randomUUID();
+
+    // 2. Supabase에 새로운 작업을 등록할 때, 방금 만든 job_id를 같이 넣어줍니다!
     const { data: jobData, error: dbError } = await supabase
       .from('qa_jobs')
-      .insert([{ status: 'pending', target_urls: urls }]) // (필요하다면 spec_url 컬럼을 추가해 저장해도 좋습니다)
-      .select('job_id')
+      .insert([{ job_id: newJobId, status: 'pending', urls: urls }])      .select('job_id')
       .single();
 
-    if (dbError) throw new Error('DB 저장 실패');
+    if (dbError) {
+      console.error('🚨 Supabase DB 상세 에러:', dbError);
+      return NextResponse.json({ 
+        error: `DB 저장 실패 - 원인: ${dbError.message}` 
+      }, { status: 500 });
+    }
 
     const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
     const GITHUB_OWNER = process.env.GITHUB_OWNER;

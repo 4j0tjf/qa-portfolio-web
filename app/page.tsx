@@ -134,14 +134,14 @@ export default function Home() {
             <label className="block text-sm font-bold text-indigo-900 mb-2">
               🎯 기준(Spec) URL (정답지)
             </label>
-            <textarea
-              placeholder="https://example.org&#13;&#10;https://example.net"
-              value={urlText}
-              onChange={(e) => setUrlText(e.target.value)}
-              rows={4}
+            <input
+              type="url"
+              placeholder="https://example.com"
+              // 👇 이 두 줄이 specUrl 로 되어 있는지 확인해 주세요!
+              value={specUrl} 
+              onChange={(e) => setSpecUrl(e.target.value)}
               disabled={isLoading}
-              // 👇 여기도 동일하게 추가합니다.
-              className="w-full px-5 py-4 rounded-xl border-2 border-gray-200 text-base focus:outline-none focus:border-blue-500 transition-colors resize-y disabled:bg-gray-100 bg-white text-gray-900 placeholder-gray-400 font-medium"
+              className="w-full px-5 py-3 rounded-lg border-2 border-indigo-200 focus:outline-none focus:border-indigo-500 transition-colors disabled:bg-gray-100 bg-white text-gray-900 placeholder-gray-400 font-medium"
             />
           </div>
 
@@ -152,11 +152,12 @@ export default function Home() {
             </label>
             <textarea
               placeholder="https://example.org&#13;&#10;https://example.net"
-              value={urlText}
+              // 👇 이 두 줄이 urlText 로 되어 있는지 확인해 주세요! (여기가 specUrl로 덮어씌워졌을 확률이 99%입니다)
+              value={urlText} 
               onChange={(e) => setUrlText(e.target.value)}
               rows={4}
               disabled={isLoading}
-              className="w-full px-5 py-4 rounded-xl border-2 border-gray-200 text-base focus:outline-none focus:border-blue-500 transition-colors resize-y disabled:bg-gray-100"
+              className="w-full px-5 py-4 rounded-xl border-2 border-gray-200 text-base focus:outline-none focus:border-blue-500 transition-colors resize-y disabled:bg-gray-100 bg-white text-gray-900 placeholder-gray-400 font-medium"
             />
           </div>
           
