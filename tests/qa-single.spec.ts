@@ -34,11 +34,17 @@ test.describe('동적 VRT(Visual Regression Testing) 자동화', () => {
         timeout: 10000
       });
       
-      // 👇 [새로 추가된 부분] 
-      // 2. 위 검증을 무사히 통과(에러 안남)했다면, 리포트에 넣을 인증샷을 찍습니다!
-      const successShot = await page.screenshot({ fullPage: true });
-      await testInfo.attach('✅ 성공한 타겟 화면 (인증샷)', { 
-        body: successShot, 
+      // Actual (현재 타겟 화면) 스크린샷 찍고 첨부하기
+      const actualShot = await page.screenshot({ fullPage: true });
+      await testInfo.attach('✅ Actual (현재 타겟 화면)', { 
+        body: actualShot, 
+        contentType: 'image/png' 
+      });
+
+      // Expected (미리 찍어둔 정답지 화면) 파일 읽어와서 첨부하기
+      const expectedShot = fs.readFileSync(snapshotPath);
+      await testInfo.attach('✅ Expected (기준 Spec 화면)', { 
+        body: expectedShot, 
         contentType: 'image/png' 
       });
       
